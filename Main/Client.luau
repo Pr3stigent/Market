@@ -46,7 +46,7 @@ function Client.initiate()
 		end)
 
 		if purchaseType == Enum.InfoType.GamePass then
-			table.insert(Cache.OwnedGamepasses[player], id)
+			Cache.OwnedGamepasses[player][id] = true
 		end
 
 		if not success then

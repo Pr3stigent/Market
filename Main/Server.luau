@@ -134,7 +134,7 @@ function Server.initiate()
 
 	PlayerRemoving(function(player)
 		if profiles[player] ~= nil then
-			profiles[player].Profile:Release()
+			profiles[player]:Release()
 		end
 	end)
 end

@@ -3,12 +3,13 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local Market = {}
-local PlayerAdded = require(script.Parent.PlayerAdded)
-local PlayerRemoving = require(script.Parent.PlayerRemoving)
 
 local Cache = require(script.Main.Cache)
-local Promise = require(script.Dependencies.Promise)
 local Processes = require(script.Main.Processes)
+
+local Promise = require(script.Dependencies.Promise)
+local PlayerAdded = require(script.Dependencies.PlayerAdded)
+local PlayerRemoving = require(script.Dependencies.PlayerRemoving)
 
 local remotes = script.Remotes
 
@@ -79,14 +80,11 @@ function Market.promptPurchase(player, purchaseType, id)
 		MarketplaceService:PromptProductPurchase(player, id)
 	elseif purchaseType == Enum.InfoType.GamePass then
 		MarketplaceService:PromptGamePassPurchase(player, id)
+	elseif purchaseType == Enum.InfoType.Asset then
+		MarketplaceService:PromptPurchase(player, id)
 	end
-
-	if RunService:IsServer() then
-		remotes.WheelSpinRemote:FireClient(player, true)
-		return
-	end
-
-	remotes.WheelSpin:Fire(true)
+	
+	remotes.WheelSpin:Fire(player, true)
 end
 
 PlayerAdded(function(player)

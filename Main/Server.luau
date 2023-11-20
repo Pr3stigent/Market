@@ -63,9 +63,6 @@ function Server.initiate()
 	end
 
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamepassId, wasPurchased)
-		-- For client gui effect
-		remotes.WheelSpinRemote:FireClient(player, false)
-		
 		if not wasPurchased then
 			return
 		end
@@ -99,13 +96,38 @@ function Server.initiate()
 		end):catch(warn)
 	end)
 	
-	MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId)
-		local player = Players:GetPlayerByUserId(userId)
-		if not player then
-			return 
+	MarketplaceService.PromptPurchaseFinished:Connect(function(player, assetId, wasPurchased)
+		if not wasPurchased then
+			return
 		end
-		-- For client gui effect
-		remotes.WheelSpinRemote:FireClient(player, false)
+
+		Promise.retry(function()
+			return Promise.new(function(resolve, reject)
+				-- Handle purchasing of assets
+				local success, result = pcall(function()
+					local handler = Processes[Enum.InfoType.Asset][assetId]
+					if not handler then
+						return error("No asset handler")
+					end
+
+					return handler()
+				end)
+
+				if success then
+					resolve()
+				else
+					reject(result)
+				end
+			end)
+		end, RETRIES):andThen(function(data)
+			-- If the handling of the gamepass was successful then we state that it was already processed and that it is now owned
+			-- Also allows for the client to go onto handling their own processes
+			remotes.Purchase:FireClient(player, Enum.InfoType.Asset, assetId, data)
+		end):catch(warn)
+	end)
+	
+	remotes.WheelSpin.Event:Connect(function(player, canAnimate)
+		remotes.WheelSpinRemote:FireClient(player, canAnimate)
 	end)
 	
 	PlayerAdded(function(player)

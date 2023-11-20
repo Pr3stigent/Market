@@ -1,3 +1,4 @@
+local MarketplaceService = game:GetService("MarketplaceService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -53,13 +54,31 @@ function Client.initiate()
 			warn(result)
 		end
 	end)
-
+	
+	-- Animate Wheel
+	
 	remotes.WheelSpinRemote.OnClientEvent:Connect(function(canAnimate)
-		remotes.WheelSpin:Fire(canAnimate)
+		remotes.WheelSpin:Fire(player, canAnimate)
 	end)
 
-	remotes.WheelSpin.Event:Connect(function(canAnimate)
+	remotes.WheelSpin.Event:Connect(function(player, canAnimate)
 		animate(canAnimate, 25)
+	end)
+	
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamepassId, wasPurchased)
+		remotes.WheelSpin:Fire(player, false)
+	end)
+
+	MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId)
+		remotes.WheelSpin:Fire(player, false)
+	end)
+
+	MarketplaceService.PromptPurchaseFinished:Connect(function(player, assetId, wasPurchased)
+		remotes.WheelSpin:Fire(player, false)
+	end)
+
+	MarketplaceService.PromptPremiumPurchaseFinished:Connect(function()
+		remotes.WheelSpin:Fire(player, false)
 	end)
 end
 

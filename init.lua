@@ -10,60 +10,66 @@ local Cache = require(script.Main.Cache)
 local Promise = require(script.Dependencies.Promise)
 local Processes = require(script.Main.Processes)
 
+local remotes = script.Remotes
+
+local function processOwnedGamepasses(player, gamepassId, callback)
+	local hasGamepass = Market.hasGamepass(player, gamepassId):awaitValue()
+
+	if hasGamepass and not Cache.ProcessedGamepass[player][gamepassId] then
+		local success = callback(player)
+		if success then
+			Cache.ProcessedGamepass[player][gamepassId] = true
+		end
+	end
+end
+
 function Market.hasGamepass(player, gamepassId): typeof(promise)
-	if table.find(Cache.OwnedGamepasses[player], gamepassId) then
+	if Cache.OwnedGamepasses[player][gamepassId] then
 		return Promise.resolve(true)
 	end
-	
-	return Promise.retry(function()
-		return Promise.new(function(resolve, reject)
-			local success, result = pcall(function()
-				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, gamepassId)
-			end)
-			
-			if success then
-				if result then
-					table.insert(Cache.OwnedGamepasses[player], gamepassId)
-				end
-				
-				resolve(result)
-			else
-				reject(result)
-			end
+
+	return Promise.new(function(resolve, reject)
+		local success, result = pcall(function()
+			return MarketplaceService:UserOwnsGamePassAsync(player.UserId, gamepassId)
 		end)
-	end, script:GetAttribute("Retries")):catch(warn)
+
+		if success then
+			if result then
+				Cache.OwnedGamepasses[player][gamepassId] = true
+			end
+
+			resolve(result)
+		else
+			reject(result)
+		end
+	end):catch(warn)
 end
 
 function Market.getInfo(purchaseType, id)
 	if Cache[purchaseType][id] then
 		return Promise.resolve(Cache[purchaseType][id])
 	end	
-	
-	return Promise.retry(function()
-		return Promise.new(function(resolve, reject)
-			local success, result = pcall(function()
-				return MarketplaceService:GetProductInfo(id, purchaseType)
-			end)
-			
-			if success then
-				Cache[purchaseType][id] = result
-				return resolve(result)
-			else
-				return reject(result)
-			end
+
+	return Promise.new(function(resolve, reject)
+		local success, result = pcall(function()
+			return MarketplaceService:GetProductInfo(id, purchaseType)
 		end)
-	end, script:GetAttribute("Retries")):catch(warn)
+
+		if success then
+			Cache[purchaseType][id] = result
+			return resolve(result)
+		else
+			return reject(result)
+		end
+	end):catch(warn)
 end
 
 function Market.attachCallback(productType, id, callback)
 	Processes[productType][id] = callback
-	
-	for _, player in Players:GetPlayers() do
-		if Cache.OwnedGamepasses[player] and productType == Enum.InfoType.GamePass and Market.hasGamepass(player, id):awaitValue() and not table.find(Cache.ProcessedGamepass[player], id) then
-			local success = callback(player)
-			if success then
-				table.insert(Cache.ProcessedGamepass[player], id)
-			end
+
+	if productType == Enum.InfoType.GamePass then
+		for _, player in Players:GetPlayers() do
+			processOwnedGamepasses(player, id, callback)
 		end
 	end
 end
@@ -74,39 +80,34 @@ function Market.promptPurchase(player, purchaseType, id)
 	elseif purchaseType == Enum.InfoType.GamePass then
 		MarketplaceService:PromptGamePassPurchase(player, id)
 	end
-	
+
 	if RunService:IsServer() then
-		script.Remotes.WheelSpinRemote:FireClient(player, true)
+		remotes.WheelSpinRemote:FireClient(player, true)
 		return
 	end
-	
-	script.Remotes.WheelSpin:Fire(true)
-end
 
-if RunService:IsServer() then
-	local Server = require(script.Main.Server)
-	Server.initiate()
-elseif RunService:IsClient() then
-	local Client = require(script.Main.Client)
-	Client.initiate()
+	remotes.WheelSpin:Fire(true)
 end
 
 PlayerAdded(function(player)
 	Cache.OwnedGamepasses[player] = {}
 	Cache.ProcessedGamepass[player] = {}
-	
-	for id, callback in Processes[Enum.InfoType.GamePass] do
-		if Market.hasGamepass(player, id):awaitValue() and not table.find(Cache.ProcessedGamepass[player], id) then
-			local success = callback(player)
-			if success then
-				table.insert(Cache.ProcessedGamepass[player], id)
-			end
-		end
+
+	for gamepassId, callback in Processes[Enum.InfoType.GamePass] do
+		processOwnedGamepasses(player, gamepassId, callback)
 	end
 end, 2, true)
 
 PlayerRemoving(function(player)
 	Cache.OwnedGamepasses[player] = nil
 end)
+
+if RunService:IsServer() then
+	local Server = require(script.Main.Server)
+	Server.initiate()
+else
+	local Client = require(script.Main.Client)
+	Client.initiate()
+end
 
 return Market

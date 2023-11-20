@@ -8,45 +8,58 @@ local Cache = require(script.Parent.Cache)
 local Processes = require(script.Parent.Processes)
 
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui", 10)
-local purchasing = script.Purchasing
+local playerGui = player:WaitForChild("PlayerGui")
+
+local purchasing = script.Purchasing:Clone()
+local main = purchasing.Main
+local wheel = main.Wheel
 purchasing.Parent = playerGui
-local main = purchasing:WaitForChild("Main")
-local wheel = main:WaitForChild("Wheel", 10)
+
+local remotes = script.Parent.Parent.Remotes
+
+local animationConnection
+
+local function animate(canAnimate, speed)
+	TweenService:Create(main, TweenInfo.new(1), {
+		GroupTransparency = if canAnimate then 0 else 1
+	}):Play()
+	
+	if not canAnimate then
+		animationConnection:Disconnect()
+		return
+	end
+
+	animationConnection = RunService.RenderStepped:Connect(function(deltaTime)
+		wheel.Rotation = (wheel.Rotation + deltaTime * speed) % 360
+	end)
+end
 
 function Client.initiate()
-	script.Parent.Parent.Remotes.Purchase.OnClientEvent:Connect(function(purchaseType, id, data)
-		local handler = Processes[purchaseType][id]
-
+	remotes.Purchase.OnClientEvent:Connect(function(purchaseType, id, data)
 		local success, result = pcall(function()
-			assert(handler, "No devproduct handler")
-			
-			handler(data)
+			local handler = Processes[purchaseType][id]
+			if not handler then
+				return error("No handler")
+			end
+
+			return handler()
 		end)
-		
-		if purchaseType == Enum.InfoType.Product then
-			table.insert(Cache.BoughtDevProdcuts[player], id)
-		else
+
+		if purchaseType == Enum.InfoType.GamePass then
 			table.insert(Cache.OwnedGamepasses[player], id)
 		end
-		
+
 		if not success then
 			warn(result)
 		end
 	end)
-	
-	script.Parent.Parent.Remotes.WheelSpinRemote.OnClientEvent:Connect(function(state)
-		script.Parent.Parent.Remotes.WheelSpin:Fire(state)
+
+	remotes.WheelSpinRemote.OnClientEvent:Connect(function(canAnimate)
+		remotes.WheelSpin:Fire(canAnimate)
 	end)
-	
-	script.Parent.Parent.Remotes.WheelSpin.Event:Connect(function(state)
-		TweenService:Create(main, TweenInfo.new(1), {
-			GroupTransparency = if state then 0 else 1
-		}):Play()
-	end)
-	
-	RunService.RenderStepped:Connect(function(deltaTime)
-		wheel.Rotation = (wheel.Rotation + deltaTime * 25) % 360
+
+	remotes.WheelSpin.Event:Connect(function(canAnimate)
+		animate(canAnimate, 25)
 	end)
 end
 

@@ -15,6 +15,10 @@ local purchaseHistory = ProfileService.GetProfileStore("PurchaseHistory", {})
 
 local profiles = {}
 
+local RETRIES = 3
+
+local remotes = script.Parent.Parent.Remotes
+
 function Server.initiate()
 	MarketplaceService.ProcessReceipt = function(receiptInfo)
 		-- Check if the player exists and has their data
@@ -31,7 +35,7 @@ function Server.initiate()
 		local playerData = profiles[player].Data
 		
 		-- Check to see if the devproduct has already been processed
-		if table.find(playerData, receiptInfo.PurchaseId) then
+		if playerData[receiptInfo.PurchaseId]  then
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end
 		
@@ -52,15 +56,15 @@ function Server.initiate()
 		end
 		
 		-- On successful granting of product, tell the client in case it has any client related processes and add the receipt info to the datastore
-		script.Parent.Parent.Remotes.Purchase:FireClient(player, Enum.InfoType.Product, receiptInfo.ProductId)
-		table.insert(playerData, receiptInfo.PurchaseId)
+		remotes.Purchase:FireClient(player, Enum.InfoType.Product, receiptInfo.ProductId)
+		playerData[receiptInfo.PurchaseId] = true
 		
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamepassId, wasPurchased)
 		-- For client gui effect
-		script.Parent.Parent.Remotes.WheelSpinRemote:FireClient(player, false)
+		remotes.WheelSpinRemote:FireClient(player, false)
 		
 		if not wasPurchased then
 			return
@@ -84,13 +88,14 @@ function Server.initiate()
 					reject(result)
 				end
 			end)
-		end, script.Parent.Parent:GetAttribute("Retries")):andThen(function(data)
+		end, RETRIES):andThen(function(data)
 			-- If the handling of the gamepass was successful then we state that it was already processed and that it is now owned
 			-- Also allows for the client to go onto handling their own processes
 			
-			table.insert(Cache.ProcessedGamepass[player], gamepassId)
-			table.insert(Cache.OwnedGamepasses[player], gamepassId)
-			script.Parent.Parent.Remotes.Purchase:FireClient(player, Enum.InfoType.GamePass, gamepassId, data)
+			Cache.ProcessedGamepass[player][gamepassId] = true
+			Cache.OwnedGamepasses[player][gamepassId] = true
+			
+			remotes.Purchase:FireClient(player, Enum.InfoType.GamePass, gamepassId, data)
 		end):catch(warn)
 	end)
 	
@@ -100,7 +105,7 @@ function Server.initiate()
 			return 
 		end
 		-- For client gui effect
-		script.Parent.Parent.Remotes.WheelSpinRemote:FireClient(player, false)
+		remotes.WheelSpinRemote:FireClient(player, false)
 	end)
 	
 	PlayerAdded(function(player)
@@ -117,7 +122,7 @@ function Server.initiate()
 				player:Kick()
 			end)
 			
-			if player:IsDescendantOf(Players) == true then
+			if player:IsDescendantOf(Players) then
 				profiles[player] = profile
 			else
 				profile:Release()

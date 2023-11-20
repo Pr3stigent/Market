@@ -5,10 +5,9 @@ local callbacks = {}
 local playerRanFOr = {}
 
 local function run(player)
-	print(player.Name, callbacks, "RUNN")
 	for _, callbackData in callbacks do
 		if table.find(playerRanFOr[callbackData.Callback], player) then
-			return
+			continue
 		end
 		
 		if callbackData.Yield then
@@ -23,6 +22,17 @@ end
 
 Players.PlayerAdded:Connect(function(player)
 	run(player)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	for _, callbackData in callbacks do
+		local inCallback = table.find(playerRanFOr[callbackData.Callback], player)
+		if not inCallback then
+			return
+		end
+		
+		table.remove(playerRanFOr[callbackData.Callback], inCallback)
+	end
 end)
 
 return function(callback, priority, yield)
